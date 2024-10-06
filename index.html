@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chain Reaction</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #000;
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+        h1 {
+            color: #f0f0f0;
+            font-size: 1.5em;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(6, 60px); /* Adjusted grid for smaller frame */
+            gap: 1px;
+            margin-bottom: 20px;
+        }
+        .cell {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 1px solid #333;
+            cursor: pointer;
+            position: relative;
+        }
+
+        /* Overlapping circle container */
+        .shape-container {
+            position: relative;
+            width: 40px;
+            height: 40px;
+        }
+
+        /* Shapes for counts (circles) */
+        .shape {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 2px solid;
+            border-radius: 50%;
+            background-color: currentColor; /* Fill the circle with player color */
+            opacity: 0.8; /* Slight transparency for overlapping effect */
+        }
+
+        /* Different circle layers for counts */
+        .shape:nth-child(1) {
+            top: 10px;
+            left: 10px;
+        }
+        .shape:nth-child(2) {
+            top: 20px;
+            left: 20px;
+        }
+        .shape:nth-child(3) {
+            top: 3px;
+            left: 0px;
+        }
+
+        /* Circle colors for players */
+        .red {
+            color: #FF4D4D; /* Player 1 */
+        }
+
+        .green {
+            color: #4DFF4D; /* Player 2 */
+        }
+
+        button {
+            padding: 8px 15px;
+            background-color: #555;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        button:hover {
+            background-color: #777;
+        }
+        #messageBox {
+            margin-top: 10px;
+            font-size: 16px;
+            padding: 8px;
+            background-color: lightgray;
+            color: black;
+            border-radius: 5px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Chain Reaction Game</h1>
+    <div class="grid" id="grid"></div>
+    <button onclick="resetGame()">Reset Game</button>
+    <div id="messageBox"></div>
+    <script>
+        const gridElement = document.getElementById('grid');
+        const messageBox = document.getElementById('messageBox');
+
+        // Function to show messages (winner, invalid move, etc.)
+        function showMessage(message, type) {
+            messageBox.style.display = 'block';
+            messageBox.innerText = message;
+            if (type === 'error') {
+                messageBox.style.backgroundColor = '#FF4D4D';
+            } else if (type === 'success') {
+                messageBox.style.backgroundColor = '#4DFF4D';
+            } else {
+                messageBox.style.backgroundColor = 'lightgray';
+            }
+        }
+
+        // Function to clear messages
+        function clearMessage() {
+            messageBox.style.display = 'none';
+            messageBox.innerText = '';
+        }
+
+        // Function to draw the grid and update UI
+        function drawGrid(grid) {
+            gridElement.innerHTML = '';  // Clear previous grid
+            for (let row of grid) {
+                for (let cell of row) {
+                    const cellElement = document.createElement('div');
+                    cellElement.className = 'cell';
+                    
+                    // Display overlapping shapes for the count
+                    let shapeContainer;
+                    if (cell[0] > 0) {
+                        shapeContainer = document.createElement('div');
+                        shapeContainer.classList.add('shape-container');
+                        
+                        for (let i = 0; i < cell[0]; i++) {
+                            const shape = document.createElement('div');
+                            shape.classList.add('shape', cell[1] === 1 ? 'red' : 'green');
+                            shapeContainer.appendChild(shape);
+                        }
+                    }
+
+                    if (shapeContainer) {
+                        cellElement.appendChild(shapeContainer);
+                    }
+
+                    // Set click event for move
+                    cellElement.onclick = () => makeMove(grid.indexOf(row), row.indexOf(cell));
+                    gridElement.appendChild(cellElement);
+                }
+            }
+        }
+
+        // Function to make a move
+        async function makeMove(x, y) {
+            clearMessage();
+            const response = await fetch('/move', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ x, y }),
+            });
+
+            const data = await response.json();
+            if (data.error) {
+                showMessage(data.error, 'error'); // Show error for invalid move
+            } else {
+                drawGrid(data.grid); // Update the grid UI with new game state
+
+                if (data.winner) {
+                    showMessage(`Player ${data.winner} wins! Restarting game...`, 'success');
+                    setTimeout(() => {
+                        resetGame();
+                    }, 3000); // Reset the game after 3 seconds
+                }
+            }
+        }
+
+        // Function to reset the game
+        async function resetGame() {
+            const response = await fetch('/reset', {
+                method: 'POST',
+            });
+            const data = await response.json();
+            drawGrid(data.grid);
+            clearMessage();
+        }
+
+        // Initialize the game with an empty grid
+        window.onload = async function () {
+            const response = await fetch('/reset', {
+                method: 'POST',
+            });
+            const data = await response.json();
+            drawGrid(data.grid);
+        }
+    </script>
+</body>
+</html>
